@@ -38,6 +38,11 @@ proyek1/
 ├── app.py                      # Halaman utama aplikasi (beranda)
 ├── requirements.txt            # Dependensi Python
 ├── .gitignore                  # Berkas pengecualian Git
+├── docs/                       # Dokumentasi lengkap & persiapan presentasi
+│   ├── 1_TEORI_DAN_PERHITUNGAN_MANUAL.md
+│   ├── 2_BEDAH_KODE_DAN_ARSITEKTUR.md
+│   ├── 3_TANYA_JAWAB_DOSEN_DAN_PENGUJIAN.md
+│   └── 4_PANDUAN_PRESENTASI_DAN_SLIDE_PPT.md
 ├── utils/
 │   ├── __init__.py
 │   └── ui.py                   # Helper formatting dataframe dan pandas styler
@@ -55,6 +60,16 @@ proyek1/
     ├── 4_RSA_Cipher.py
     └── 5_Super_Enkripsi.py
 ```
+
+---
+
+## Dokumentasi & Panduan Presentasi
+
+Folder `docs/` menyediakan panduan komprehensif untuk pengujian dan presentasi kelas:
+- [1. Teori dan Perhitungan Manual](file:///d:/KULIAH/Semester%205/Kriptografi/proyek1/docs/1_TEORI_DAN_PERHITUNGAN_MANUAL.md): Konsep matematis mendalam, Teorema Euler, Galois Field $GF(2^8)$, dan simulasi hitungan manual langkah-demi-langkah.
+- [2. Bedah Kode dan Arsitektur](file:///d:/KULIAH/Semester%205/Kriptografi/proyek1/docs/2_BEDAH_KODE_DAN_ARSITEKTUR.md): Penjelasan alur kode, struktur data tracer visualisasi, dan pemisahan SoC (*Separation of Concerns*).
+- [3. Tanya Jawab Dosen dan Pengujian](file:///d:/KULIAH/Semester%205/Kriptografi/proyek1/docs/3_TANYA_JAWAB_DOSEN_DAN_PENGUJIAN.md): Kumpulan 16 pertanyaan kritis yang sering diajukan dosen kriptografi beserta jawaban akademis berbobot.
+- [4. Panduan Slide PPT dan Live Demo](file:///d:/KULIAH/Semester%205/Kriptografi/proyek1/docs/4_PANDUAN_PRESENTASI_DAN_SLIDE_PPT.md): Strategi pembagian konten slide vs demo langsung, struktur 10 slide PPT, dan rundown waktu 20 menit.
 
 ---
 
