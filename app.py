@@ -57,22 +57,27 @@ st.write(
 st.divider()
 
 st.subheader("Identitas Kelompok")
-col_t1, col_t2, col_t3 = st.columns(3)
+col_t1, col_t2, col_t3, col_t4 = st.columns(4)
 
 with col_t1:
     st.write("**Anggota 1:**")
-    st.write("Nama: [Nama Mahasiswa 1]")
-    st.write("NIM: [NIM Mahasiswa 1]")
+    st.write("Nama: Waladi Lintang Novianto")
+    st.write("NIM: 123240065")
 
 with col_t2:
     st.write("**Anggota 2:**")
-    st.write("Nama: [Nama Mahasiswa 2]")
-    st.write("NIM: [NIM Mahasiswa 2]")
+    st.write("Nama: Pande Made Deva Brahmasta")
+    st.write("NIM: 123240080")
 
 with col_t3:
     st.write("**Anggota 3:**")
-    st.write("Nama: [Nama Mahasiswa 3]")
-    st.write("NIM: [NIM Mahasiswa 3]")
+    st.write("Nama: Rafi Dzaka Pratama Putra")
+    st.write("NIM: 123240104")
+
+with col_t4:
+    st.write("**Anggota 4:**")
+    st.write("Nama: Rifki Zakaria Yahya")
+    st.write("NIM: 123240200")
 
 with st.sidebar:
     st.write("### Kriptografi - Proyek 1")
