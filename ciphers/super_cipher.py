@@ -1,134 +1,147 @@
 from typing import Dict, Any, Tuple
 from ciphers.vigenere import encrypt_vigenere, decrypt_vigenere
 from ciphers.playfair import encrypt_playfair, decrypt_playfair
-from ciphers.aes_cipher import encrypt_aes, decrypt_aes
-from ciphers.rsa_cipher import generate_rsa_keys, encrypt_rsa_char_by_char, decrypt_rsa_char_by_char
+from ciphers.lfsr import lfsr_crypt_bytes
+from ciphers.vernam import vernam_xor_bytes, generate_vernam_key
+
+
+def _hex(b: bytes) -> str:
+    return b.hex().upper()
+
 
 def super_encrypt(
     plaintext: str,
     key_vig: str,
     key_playfair: str,
-    key_aes: str,
-    rsa_p: int,
-    rsa_q: int,
-    rsa_e: int = None
+    lfsr_seed: str,
+    lfsr_n: int,
+    vernam_key: str = None
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Executes 4-layer sequential Super Encryption:
-    Plaintext -> [1. Vigenere] -> Stage 1
-              -> [2. Playfair] -> Stage 2
-              -> [3. AES-128]  -> Stage 3 (Base64)
-              -> [4. RSA]      -> Stage 4 Final (Numeric Sequence)
+    Plaintext -> [1. Playfair]     -> Stage 1
+              -> [2. Vigenere]     -> Stage 2
+              -> [3. LFSR stream]  -> Stage 3 (bytes)
+              -> [4. Vernam / OTP] -> Stage 4 Final (Hex)
+
+    If vernam_key is None/empty, a random one-time key of the required length is generated.
     """
     trace = {}
-    
-    # 1. Vigenere Cipher
-    c1, vig_steps = encrypt_vigenere(plaintext, key_vig)
+
+    # 1. Playfair Cipher (first, so 'J' -> 'I' merging only affects the raw plaintext)
+    c1, matrix, key_chars, pf_steps = encrypt_playfair(plaintext, key_playfair)
     trace["stage_1"] = {
-        "name": "1. Vigenère Cipher",
+        "name": "1. Playfair Cipher",
         "input": plaintext,
-        "key": key_vig,
+        "key": key_playfair,
         "output": c1,
+        "details": f"Enkripsi Playfair selesai ({len(pf_steps)} digraph diproses, panjang {len(c1)})."
+    }
+
+    # 2. Vigenere Cipher
+    c2, vig_steps = encrypt_vigenere(c1, key_vig)
+    trace["stage_2"] = {
+        "name": "2. Vigenère Cipher",
+        "input": c1,
+        "key": key_vig,
+        "output": c2,
         "details": f"Enkripsi Vigenère selesai ({len(vig_steps)} karakter diproses)."
     }
-    
-    # 2. Playfair Cipher
-    c2, matrix, key_chars, pf_steps = encrypt_playfair(c1, key_playfair)
-    trace["stage_2"] = {
-        "name": "2. Playfair Cipher",
-        "input": c1,
-        "key": key_playfair,
-        "output": c2,
-        "details": f"Enkripsi Playfair selesai ({len(pf_steps)} digraph diproses, panjang {len(c2)})."
-    }
-    
-    # 3. AES-128 Cipher
-    b64_cipher, hex_cipher, aes_trace = encrypt_aes(c2, key_aes)
-    trace["stage_3"] = {
-        "name": "3. AES-128 Modern",
-        "input": c2,
-        "key": key_aes,
-        "output": b64_cipher,
-        "output_hex": hex_cipher,
-        "details": f"Enkripsi AES selesai (Padded {aes_trace['padded_len']} byte, Base64 output)."
-    }
-    
-    # 4. RSA Cipher
-    rsa_keys = generate_rsa_keys(rsa_p, rsa_q, rsa_e)
-    e = rsa_keys["e"]
-    n = rsa_keys["n"]
-    cipher_ints, rsa_str, rsa_steps = encrypt_rsa_char_by_char(b64_cipher, e, n)
-    trace["stage_4"] = {
-        "name": "4. RSA Asimetris",
-        "input": b64_cipher,
-        "key": f"e={e}, n={n}",
-        "output": rsa_str,
-        "details": f"Enkripsi RSA selesai ({len(rsa_steps)} karakter ASCII dienkripsi menjadi integer modular)."
-    }
-    trace["rsa_keys"] = rsa_keys
 
-    return rsa_str, trace
+    # 3. LFSR-based stream cipher
+    c3_bytes, lfsr_steps, _ = lfsr_crypt_bytes(c2.encode("utf-8"), lfsr_seed, lfsr_n)
+    trace["stage_3"] = {
+        "name": "3. LFSR Stream Cipher",
+        "input": c2,
+        "key": f"seed={lfsr_seed}, register={lfsr_n} bit",
+        "output": _hex(c3_bytes),
+        "details": f"Enkripsi LFSR selesai ({len(lfsr_steps)} byte di-XOR dengan keystream {len(lfsr_steps) * 8} bit)."
+    }
+
+    # 4. Vernam Cipher (One-Time Pad)
+    generated = not vernam_key
+    if generated:
+        vernam_key = generate_vernam_key(len(c3_bytes))
+    c4_bytes, vn_steps = vernam_xor_bytes(c3_bytes, vernam_key.encode("utf-8"))
+    final_hex = _hex(c4_bytes)
+    trace["stage_4"] = {
+        "name": "4. Vernam Cipher (One-Time Pad)",
+        "input": _hex(c3_bytes),
+        "key": vernam_key,
+        "output": final_hex,
+        "details": f"Enkripsi Vernam selesai ({len(vn_steps)} byte di-XOR dengan kunci OTP"
+                   f"{' yang dibangkitkan otomatis' if generated else ''})."
+    }
+    trace["vernam_key"] = vernam_key
+    trace["vernam_key_generated"] = generated
+
+    return final_hex, trace
+
 
 def super_decrypt(
     ciphertext: str,
     key_vig: str,
     key_playfair: str,
-    key_aes: str,
-    rsa_p: int,
-    rsa_q: int,
-    rsa_e: int = None
+    lfsr_seed: str,
+    lfsr_n: int,
+    vernam_key: str
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Executes inverse 4-layer sequential Super Decryption:
-    Ciphertext -> [1. RSA Decrypt]      -> Stage 3 (Base64)
-               -> [2. AES-128 Decrypt]  -> Stage 2
-               -> [3. Playfair Decrypt] -> Stage 1
-               -> [4. Vigenere Decrypt] -> Plaintext Asli
+    Ciphertext (Hex) -> [1. Vernam Decrypt]   -> Stage 3 (bytes)
+                     -> [2. LFSR Decrypt]     -> Stage 2
+                     -> [3. Vigenere Decrypt] -> Stage 1
+                     -> [4. Playfair Decrypt] -> Plaintext Asli
     """
     trace = {}
-    
-    # 1. RSA Decrypt
-    rsa_keys = generate_rsa_keys(rsa_p, rsa_q, rsa_e)
-    d = rsa_keys["d"]
-    n = rsa_keys["n"]
-    dec_rsa_b64, rsa_steps = decrypt_rsa_char_by_char(ciphertext, d, n)
+
+    try:
+        cipher_bytes = bytes.fromhex("".join(ciphertext.split()))
+    except ValueError:
+        raise ValueError("Ciphertext harus berupa string heksadesimal yang valid.")
+
+    # 1. Vernam Decrypt
+    d1_bytes, vn_steps = vernam_xor_bytes(cipher_bytes, vernam_key.encode("utf-8"))
     trace["stage_1"] = {
-        "name": "1. RSA Decryption",
-        "input": ciphertext[:80] + ("..." if len(ciphertext) > 80 else ""),
-        "key": f"d={d}, n={n}",
-        "output": dec_rsa_b64,
-        "details": f"Dekripsi RSA selesai ({len(rsa_steps)} blok integer dipulihkan ke Base64)."
+        "name": "1. Vernam Decryption",
+        "input": _hex(cipher_bytes),
+        "key": vernam_key,
+        "output": _hex(d1_bytes),
+        "details": f"Dekripsi Vernam selesai ({len(vn_steps)} byte di-XOR kembali dengan kunci OTP)."
     }
-    
-    # 2. AES Decrypt
-    dec_aes_text, aes_trace = decrypt_aes(dec_rsa_b64, key_aes, is_base64=True)
+
+    # 2. LFSR Decrypt
+    d2_bytes, lfsr_steps, _ = lfsr_crypt_bytes(d1_bytes, lfsr_seed, lfsr_n)
+    try:
+        d2_text = d2_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Hasil dekripsi LFSR bukan teks valid (kunci Vernam atau seed LFSR kemungkinan salah).")
     trace["stage_2"] = {
-        "name": "2. AES-128 Decryption",
-        "input": dec_rsa_b64,
-        "key": key_aes,
-        "output": dec_aes_text,
-        "details": f"Dekripsi AES selesai (Padding {aes_trace['padding_removed']} byte dihapus)."
+        "name": "2. LFSR Decryption",
+        "input": _hex(d1_bytes),
+        "key": f"seed={lfsr_seed}, register={lfsr_n} bit",
+        "output": d2_text,
+        "details": f"Dekripsi LFSR selesai ({len(lfsr_steps)} byte, keystream identik dengan saat enkripsi)."
     }
-    
-    # 3. Playfair Decrypt
-    dec_pf_text, matrix, key_chars, pf_steps = decrypt_playfair(dec_aes_text, key_playfair)
+
+    # 3. Vigenere Decrypt
+    d3_text, vig_steps = decrypt_vigenere(d2_text, key_vig)
     trace["stage_3"] = {
-        "name": "3. Playfair Decryption",
-        "input": dec_aes_text,
-        "key": key_playfair,
-        "output": dec_pf_text,
-        "details": f"Dekripsi Playfair selesai ({len(pf_steps)} digraph diproses)."
-    }
-    
-    # 4. Vigenere Decrypt
-    dec_vig_text, vig_steps = decrypt_vigenere(dec_pf_text, key_vig)
-    trace["stage_4"] = {
-        "name": "4. Vigenère Decryption",
-        "input": dec_pf_text,
+        "name": "3. Vigenère Decryption",
+        "input": d2_text,
         "key": key_vig,
-        "output": dec_vig_text,
+        "output": d3_text,
         "details": f"Dekripsi Vigenère selesai ({len(vig_steps)} karakter dipulihkan)."
     }
-    trace["rsa_keys"] = rsa_keys
-    
-    return dec_vig_text, trace
+
+    # 4. Playfair Decrypt
+    d4_text, matrix, key_chars, pf_steps = decrypt_playfair(d3_text, key_playfair)
+    trace["stage_4"] = {
+        "name": "4. Playfair Decryption",
+        "input": d3_text,
+        "key": key_playfair,
+        "output": d4_text,
+        "details": f"Dekripsi Playfair selesai ({len(pf_steps)} digraph diproses)."
+    }
+
+    return d4_text, trace

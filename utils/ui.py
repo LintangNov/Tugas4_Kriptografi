@@ -28,13 +28,3 @@ def style_playfair_grid(matrix_5x5, key_chars=None, highlight_coords=None):
         return styles
 
     return df.style.apply(highlight_cells, axis=None)
-
-def format_aes_state_dataframe(state_4x4):
-    """
-    Converts a 4x4 AES state matrix of bytes into a clean pandas DataFrame with hex strings.
-    """
-    hex_matrix = []
-    for r in range(4):
-        row = [f"{val:02X}" if isinstance(val, int) else str(val) for val in state_4x4[r]]
-        hex_matrix.append(row)
-    return pd.DataFrame(hex_matrix, columns=["Col 0", "Col 1", "Col 2", "Col 3"], index=["Row 0", "Row 1", "Row 2", "Row 3"])

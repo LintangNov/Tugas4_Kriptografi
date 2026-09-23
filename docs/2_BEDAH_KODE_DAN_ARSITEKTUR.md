@@ -33,7 +33,7 @@ Aplikasi ini mengadopsi pola pemisahan tanggung jawab (*Separation of Concerns* 
 2. **Lapisan Presentasi (`pages/` & `app.py`):**
    Hanya bertanggung jawab menangani interaksi pengguna, validasi input antarmuka, rendering komponen native Streamlit (`st.header`, `st.tabs`, `st.expander`), dan menampilkan tabel visualisasi.
 3. **Formatters (`utils/ui.py`):**
-   Menyediakan fungsi formatting berbasis Pandas Styler untuk matriks Playfair dan matriks State AES tanpa menyuntikkan kode HTML/CSS custom yang tidak aman (*unsafe*).
+   Menyediakan fungsi formatting berbasis Pandas Styler untuk matriks Playfair tanpa menyuntikkan kode HTML/CSS custom yang tidak aman (*unsafe*).
 
 ---
 
@@ -74,40 +74,36 @@ Aplikasi ini mengadopsi pola pemisahan tanggung jawab (*Separation of Concerns* 
     - `r1 != r2 and col1 != col2` (Persegi Panjang): tukar kolom $(r_1, c_2)$ dan $(r_2, c_1)$.
   - Menyimpan informasi aturan dan koordinat untuk fitur penyorotan sel matriks pada antarmuka pengguna.
 
-### 2.3 Modul AES-128 (`ciphers/aes_cipher.py`)
-- **Penanganan Kunci (`normalize_key_16`):**
-  Mengonversi string kunci menjadi array 16 byte (`128 bit`). Jika panjang string kurang dari 16 byte, dilakukan padding karakter `#`, jika lebih dipotong 16 byte pertama.
-- **Implementasi Standar Industri (PyCryptodome):**
-  Fungsi enkripsi dan dekripsi utama menggunakan `Crypto.Cipher.AES` dengan mode ECB dan padding `Crypto.Util.Padding.pad(..., 16, style='pkcs7')`. Hal ini menjamin kesesuaian standar kriptografi modern FIPS PUB 197.
-- **Tracer Visualisasi Blok Pertama (`trace_aes_first_block`):**
-  Untuk tujuan edukatif, modul ini mengimplementasikan transformasi State Matrix langkah-demi-langkah secara manual khusus pada blok 16 byte pertama:
-  - `bytes_to_state(block_bytes)`: Memetakan 16 byte ke matriks $4 \times 4$ berordo kolom (*column-major*).
-  - `sub_bytes_transform(state)`: Melakukan substitusi nilai byte berdasarkan tabel lookup konstan `S_BOX` Rijndael (256 byte).
-  - `shift_rows_transform(state)`: Melakukan pergeseran siklis ke kiri pada baris 1 (1 byte), baris 2 (2 byte), dan baris 3 (3 byte).
-  - `mix_columns_transform(state)`: Menerapkan fungsi `xtime` untuk perkalian dalam Galois Field $GF(2^8)$ modulo polinomial tak tereduksi $x^8 + x^4 + x^3 + x + 1$.
-  - `generate_round_keys(key_bytes)`: Menghasilkan 11 round key (Round 0 s/d Round 10) menggunakan rotasi kata `RotWord`, substitusi `SubWord`, dan konstanta putaran `RCON`.
+### 2.3 Modul Vernam (`ciphers/vernam.py`)
+- **Pembangkit Kunci (`generate_vernam_key`):**
+  Membangkitkan kunci acak dari huruf dan angka menggunakan modul `secrets` (CSPRNG), dengan panjang sama dengan pesan.
+- **Inti Operasi (`vernam_xor_bytes(data, key)`):**
+  Memvalidasi bahwa panjang kunci sama persis dengan panjang data (aturan OTP), lalu meng-XOR tiap byte. Fungsi ini juga mengembalikan *trace* per byte (karakter, ASCII, biner P, biner K, hasil XOR, hex). Karena XOR adalah invers dirinya sendiri, fungsi yang sama dipakai untuk enkripsi dan dekripsi.
+- **Pembungkus Teks (`encrypt_vernam`, `decrypt_vernam`):**
+  Mengonversi teks UTF-8 ke byte, memanggil `vernam_xor_bytes`, dan mengembalikan/menerima ciphertext dalam heksadesimal.
 
-### 2.4 Modul RSA (`ciphers/rsa_cipher.py`)
-- **Verifikasi Prima (`is_prime`):**
-  Melakukan pemeriksaan deterministik bilangan prima dengan kompleksitas waktu $O(\sqrt{n})$.
-- **Extended Euclidean Algorithm (`extended_gcd`):**
-  Fungsi rekursif yang menghitung nilai $x$ dan $y$ sedemikian rupa sehingga:
-  $$a \cdot x + b \cdot y = \gcd(a, b)$$
-- **Invers Modular (`mod_inverse`):**
-  Menghitung kunci privat $d$ dari eksponen publik $e$ dan totient $\phi(n)$:
-  $$d \equiv e^{-1} \pmod{\phi(n)}$$
-- **Enkripsi dan Dekripsi Karakter demi Karakter:**
-  - `encrypt_rsa_char_by_char`: Mengonversi karakter teks menjadi representasi ASCII desimal $M$, lalu menghitung $C = \text{pow}(M, e, n)$ menggunakan algoritma modular eksponensial bawaan Python yang efisien ($O(\log e)$).
-  - `decrypt_rsa_char_by_char`: Menghitung $M = \text{pow}(C, d, n)$, lalu mengonversinya kembali menjadi karakter menggunakan `chr(M)`.
+### 2.4 Modul LFSR Stream Cipher (`ciphers/lfsr.py`)
+- **Konfigurasi (`LFSR_TAPS`):**
+  Kamus tap polinomial primitif untuk register 4, 8, dan 16 bit ($x^4+x^3+1$, $x^8+x^6+x^5+x^4+1$, $x^{16}+x^{14}+x^{13}+x^{11}+1$) sehingga periode selalu maksimum $2^n - 1$.
+- **Validasi Seed (`parse_seed`):**
+  Memastikan seed berupa string biner tepat $n$ digit dan tidak semua nol.
+- **Satu Clock (`lfsr_clock`):**
+  Output = LSB; feedback = XOR bit pada posisi tap (posisi tap $t$ dipetakan ke indeks bit $n - t$); register digeser kanan dan feedback dimasukkan di MSB.
+- **Pembangkit Keystream (`lfsr_keystream_bytes`):**
+  Menjalankan 8 clock per byte dan menyusun bit output (bit pertama = MSB) menjadi byte keystream.
+- **Enkripsi/Dekripsi Simetris (`lfsr_crypt_bytes`):**
+  Meng-XOR data dengan keystream, mengembalikan byte hasil, *trace* per byte, dan *trace* clock (24 clock pertama) untuk visualisasi state register.
+- **Pembungkus Teks (`encrypt_lfsr`, `decrypt_lfsr`):** Menerima teks/hex dan mengembalikan hex/teks.
 
 ### 2.5 Modul Super Enkripsi (`ciphers/super_cipher.py`)
-- Mengintegrasikan keempat modul di atas menjadi sebuah pipa komputasi berurutan:
+- Mengintegrasikan keempat modul menjadi pipa komputasi berurutan:
   - **Fungsi `super_encrypt`:**
-    `Plaintext -> encrypt_vigenere -> encrypt_playfair -> encrypt_aes -> encrypt_rsa_char_by_char -> Ciphertext Final`.
-    Mengumpulkan kamus objek `trace` untuk setiap tahapan (1 hingga 4) yang memuat input teks, kunci yang digunakan, output parsial, dan catatan teknis.
+    `Plaintext -> encrypt_playfair -> encrypt_vigenere -> lfsr_crypt_bytes -> vernam_xor_bytes -> Ciphertext Final (Hex)`.
+    Antara LFSR dan Vernam data diteruskan sebagai byte mentah (bukan teks) agar tidak ada penggandaan panjang. Jika kunci Vernam tidak diberikan, dibangkitkan otomatis sepanjang keluaran LFSR dan dikembalikan pada `trace["vernam_key"]`. Mengumpulkan kamus objek `trace` untuk setiap tahapan (1 hingga 4).
   - **Fungsi `super_decrypt`:**
     Menerapkan pembalikan secara presisi:
-    `Ciphertext Final -> decrypt_rsa_char_by_char -> decrypt_aes -> decrypt_playfair -> decrypt_vigenere -> Plaintext Asli`.
+    `Ciphertext (Hex) -> vernam_xor_bytes -> lfsr_crypt_bytes -> decrypt_vigenere -> decrypt_playfair -> Plaintext Asli`.
+- **Alasan Playfair di depan:** Playfair menggabungkan $J$ dan $I$; bila dijalankan setelah Vigenère, huruf $J$ pada ciphertext Vigenère akan rusak menjadi $I$. Dengan Playfair pertama, seluruh tahap sesudahnya invertibel penuh.
 
 ---
 
@@ -119,8 +115,8 @@ Untuk mematuhi prinsip tampilan bersih bawaan Streamlit (tanpa injeksi HTML atau
   - Sel pada koordinat input pasangan bigram diwarnai kuning (`#fef08a`).
   - Sel pada koordinat output transformasi diwarnai hijau muda (`#bbf7d0`).
   - Huruf yang berasal langsung dari kunci diberi gaya tebal dan garis bawah.
-- **`format_aes_state_dataframe(state_4x4)`:**
-  Mengonversi matriks state yang berisi nilai integer byte ($0 - 255$) menjadi DataFrame $4 \times 4$ dengan representasi string heksadesimal dua digit uppercase (`00` hingga `FF`).
+
+Halaman Vernam dan LFSR menampilkan visualisasi langsung dengan `st.dataframe` dari data *trace* sehingga tidak memerlukan helper tambahan.
 
 ---
 
@@ -130,6 +126,6 @@ Setiap halaman pada folder `pages/` mengikuti konvensi penamaan standar multipag
 - `app.py`: Titik masuk utama aplikasi (beranda, ringkasan fitur, dan identitas kelompok).
 - `pages/1_Vigenere_Cipher.py`: Tab Enkripsi & Dekripsi, metrik karakter, dan tabel pergeseran per karakter.
 - `pages/2_Playfair_Cipher.py`: Tab Enkripsi & Dekripsi, visualisasi grid 5x5, tabel digraph, dan dropdown interaktif untuk menyorot pasangan bigram pada grid.
-- `pages/3_AES_Cipher.py`: Tab Enkripsi & Dekripsi, rincian padding PKCS#7, ringkasan Round Key 0 dan 10, serta expander matriks state 4x4 Pre-Round dan Round 1.
-- `pages/4_RSA_Cipher.py`: Form parameter bilangan prima $p, q$, pemilihan $e$, metrik modulus $n$, totient $\phi(n)$, kunci publik, kunci privat, serta tabel eksponensial modular per karakter.
-- `pages/5_Super_Enkripsi.py`: Form input 4 kunci sekaligus, visualisasi bertingkat melalui `st.expander` untuk tiap tahap enkripsi/dekripsi, serta diagram alur pipa data menggunakan `st.graphviz_chart`.
+- `pages/3_Vernam_Cipher.py`: Tab Enkripsi & Dekripsi, opsi kunci acak otomatis, tabel XOR per byte (biner P, biner K, hasil XOR, hex).
+- `pages/4_LFSR_Stream_Cipher.py`: Pemilihan panjang register (4/8/16 bit), input seed biner, tabel jejak clock (state, feedback, output bit), dan tabel XOR keystream per byte.
+- `pages/5_Super_Enkripsi.py`: Form input kunci Playfair, Vigenère, LFSR (register + seed), dan Vernam, visualisasi bertingkat melalui `st.expander` untuk tiap tahap enkripsi/dekripsi, serta diagram alur pipa data menggunakan `st.graphviz_chart`.

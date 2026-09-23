@@ -1,6 +1,6 @@
 # Panduan Teori Dasar dan Perhitungan Manual Algoritma Kriptografi
 
-Dokumen ini disusun sebagai referensi akademis komprehensif bagi tim pengembang untuk memahami prinsip teoritis, formulasi matematika, dan simulasi perhitungan manual dari seluruh algoritma yang diimplementasikan dalam aplikasi: Vigenère Cipher, Playfair Cipher, AES-128, RSA, serta Super Enkripsi.
+Dokumen ini disusun sebagai referensi akademis komprehensif bagi tim pengembang untuk memahami prinsip teoritis, formulasi matematika, dan simulasi perhitungan manual dari seluruh algoritma yang diimplementasikan dalam aplikasi: Vigenère Cipher, Playfair Cipher, Vernam Cipher (One-Time Pad), LFSR-based Stream Cipher, serta Super Enkripsi.
 
 ---
 
@@ -111,105 +111,95 @@ Simulasi Transformasi Pasangan:
 
 ---
 
-## 3. Advanced Encryption Standard / AES-128 (Modern - Simetris)
+## 3. Vernam Cipher / One-Time Pad (Modern - Stream Simetris)
 
 ### 3.1 Teori Dasar
-AES (Rijndael) adalah sandi blok simetris standar FIPS PUB 197 yang beroperasi pada blok berukuran tetap 128 bit (16 byte). Untuk AES-128, panjang kunci adalah 128 bit dengan 10 putaran (*round*). Struktur AES berbasis *Substitution-Permutation Network* (SPN), bukan struktur Feistel.
+Vernam Cipher (Gilbert Vernam, 1917) adalah sandi aliran (*stream cipher*) yang meng-XOR setiap bit plaintext dengan bit kunci pada posisi yang sama. Jika kunci memenuhi tiga syarat berikut, sandi ini disebut **One-Time Pad (OTP)** dan terbukti aman secara teoretis (*perfect secrecy*, Shannon 1949):
+1. Kunci **benar-benar acak**.
+2. Panjang kunci **sama persis** dengan panjang pesan.
+3. Kunci **hanya dipakai satu kali** (tidak boleh digunakan ulang).
 
-Blok 16 byte disusun dalam Matriks State $4 \times 4$ berordo kolom (*column-major order*):
-```
-| b0  b4  b8  b12 |
-| b1  b5  b9  b13 |
-| b2  b6  b10 b14 |
-| b3  b7  b11 b15 |
-```
+Pada perfect secrecy, ciphertext tidak memberikan informasi apa pun tentang plaintext: setiap plaintext dengan panjang yang sama sama-sama mungkin menghasilkan ciphertext tersebut, tergantung kunci yang dipakai.
 
-### 3.2 Tahapan Algoritma AES
-1. **Padding (PKCS#7):**
-   Setiap blok masukan harus tepat kelipatan 16 byte. Jika panjang data modulo 16 menyisakan $k$ byte ($k < 16$), maka ditambahkan $16 - k$ byte padding, di mana nilai masing-masing byte padding adalah bilangan $(16 - k)$. Jika data sudah tepat kelipatan 16 byte, tetap ditambahkan satu blok penuh berukuran 16 byte bernilai `0x10`.
-2. **Key Expansion:**
-   Kunci 16 byte diekspansi menjadi deretan *Round Keys* (11 sub-kunci untuk AES-128, yaitu Round 0 hingga Round 10). Pembangkitan melibatkan operasi `RotWord`, `SubWord` (S-Box), dan penambahan konstanta putaran `Rcon`.
-3. **Struktur Putaran:**
-   - **Pre-Round (Round 0):** `AddRoundKey`
-   - **Round 1 sampai Round 9 (Standard Round):**
-     1. `SubBytes`: Substitusi byte non-linear menggunakan S-Box Rijndael.
-     2. `ShiftRows`: Pergeseran siklis ke kiri pada setiap baris matriks state:
-        - Baris 0: tidak bergeser.
-        - Baris 1: bergeser 1 byte ke kiri.
-        - Baris 2: bergeser 2 byte ke kiri.
-        - Baris 3: bergeser 3 byte ke kiri.
-     3. `MixColumns`: Operasi difusi linear di mana setiap kolom dikalikan dengan matriks konstan terbalikkan dalam medan berhingga (*Galois Field*) $GF(2^8)$ modulo polinomial tak tereduksi:
-        $$m(x) = x^8 + x^4 + x^3 + x + 1 \quad (\text{heksadesimal: } \text{0x11B})$$
-     4. `AddRoundKey`: Operasi XOR bitwise antara State Matrix dengan Round Key putaran terkait.
-   - **Round 10 (Final Round):**
-     Sama seperti standard round, namun **tanpa operasi MixColumns** (`SubBytes` -> `ShiftRows` -> `AddRoundKey`). Hal ini dirancang agar proses enkripsi dan dekripsi memiliki simetri struktural.
+### 3.2 Formulasi Matematika
+Operasi dilakukan per bit (atau per byte) dengan XOR ($\oplus$):
+- **Enkripsi:** $C_i = P_i \oplus K_i$
+- **Dekripsi:** $P_i = C_i \oplus K_i$
 
-### 3.3 Operasi Perkalian pada Galois Field GF(2^8) (xtime)
-Pada tahap `MixColumns`, perkalian dengan bilangan 2 dilakukan melalui fungsi `xtime(a)`:
-- Geser bit ke kiri 1 posisi: `a << 1`.
-- Jika bit ke-7 bernilai 1 (terjadi overflow di luar 8 bit), lakukan XOR dengan `0x1B`.
-Contoh perkalian:
-- $2 \cdot a = \text{xtime}(a)$
-- $3 \cdot a = \text{xtime}(a) \oplus a$
+Dekripsi memakai operasi yang sama karena XOR adalah invers dirinya sendiri:
+$$(P \oplus K) \oplus K = P \oplus (K \oplus K) = P \oplus 0 = P$$
+
+Tabel kebenaran XOR: $0 \oplus 0 = 0$, $0 \oplus 1 = 1$, $1 \oplus 0 = 1$, $1 \oplus 1 = 0$.
+
+### 3.3 Contoh Perhitungan Manual
+- **Plaintext:** `HALO`
+- **Kunci OTP:** `Xk9#` (panjang 4 = panjang pesan)
+
+| Char P | ASCII | Biner P | Char K | Biner K | P $\oplus$ K | Hex C |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `H` | 72 | 01001000 | `X` | 01011000 | 00010000 | `10` |
+| `A` | 65 | 01000001 | `k` | 01101011 | 00101010 | `2A` |
+| `L` | 76 | 01001100 | `9` | 00111001 | 01110101 | `75` |
+| `O` | 79 | 01001111 | `#` | 00100011 | 01101100 | `6C` |
+
+- **Ciphertext (Hex):** `102A756C`
+
+Simulasi Dekripsi (baris pertama): $00010000 \oplus 01011000 = 01001000 = 72 \rightarrow$ `H` (pulih sempurna).
+
+### 3.4 Catatan Implementasi
+Aplikasi ini menolak kunci yang panjangnya tidak sama dengan panjang pesan (dalam byte), dan menyediakan pembangkit kunci acak berbasis modul `secrets` (CSPRNG). Keluaran ditampilkan dalam heksadesimal karena hasil XOR dapat berupa byte yang tidak bisa dicetak.
 
 ---
 
-## 4. Rivest-Shamir-Adleman / RSA (Modern - Asimetris)
+## 4. LFSR-based Stream Cipher (Modern - Stream Simetris)
 
-### 4.1 Teori Dasar & Teorema Euler
-RSA didasarkan pada prinsip matematika bahwa perkalian dua bilangan prima besar adalah komputasi yang sangat cepat, namun memfaktorkan kembali hasil kali tersebut menjadi komponen primanya (*integer factorization problem*) adalah komputasi yang sangat sulit dalam waktu polinomial.
+### 4.1 Teori Dasar
+OTP tidak praktis karena kunci harus sepanjang pesan dan didistribusikan secara aman. Sandi aliran modern mengatasinya dengan **pembangkit keystream pseudo-acak (PRNG)**: kunci pendek (*seed*) diperluas menjadi aliran bit panjang yang tampak acak, lalu di-XOR dengan plaintext seperti pada Vernam.
 
-Teorema Euler menyatakan bahwa jika $\gcd(a, n) = 1$, maka:
-$$a^{\phi(n)} \equiv 1 \pmod n$$
-Hal ini berimplikasi bahwa:
-$$a^{k \cdot \phi(n) + 1} \equiv a \pmod n$$
+**LFSR (*Linear Feedback Shift Register*)** adalah register geser $n$ bit yang bit masukannya berasal dari XOR beberapa bit tertentu (*tap*) pada register itu sendiri. LFSR mudah diimplementasikan di perangkat keras dan menghasilkan barisan bit berperiode panjang jika tap-nya dipilih dari polinomial primitif.
 
-### 4.2 Langkah Pembentukan Kunci (Key Generation)
-1. Pilih dua bilangan prima sembarang $p$ dan $q$ ($p \ne q$).
-2. Hitung modulus:
-   $$n = p \times q$$
-3. Hitung fungsi Euler Totient:
-   $$\phi(n) = (p - 1)(q - 1)$$
-4. Tentukan eksponen publik $e$ dengan ketentuan:
-   $$1 < e < \phi(n) \quad \text{dan} \quad \gcd(e, \phi(n)) = 1$$
-5. Tentukan eksponen privat $d$ sebagai invers perkalian modular dari $e$ modulo $\phi(n)$:
-   $$e \cdot d \equiv 1 \pmod{\phi(n)}$$
-   Nilai $d$ dicari menggunakan Algoritma Euclidean Diperluas (*Extended Euclidean Algorithm*).
-6. **Kunci Publik:** $(e, n)$
-7. **Kunci Privat:** $(d, n)$
+### 4.2 Formulasi Matematika
+Pada implementasi ini (Fibonacci LFSR, geser ke kanan):
+- **Bit output:** bit paling kanan (LSB) register.
+- **Bit feedback:** $f = \bigoplus_{t \in T} b_{n-t}$, XOR bit-bit pada posisi tap $T$.
+- **Update register:** geser satu bit ke kanan, lalu $f$ dimasukkan ke posisi paling kiri.
+- **Keystream byte:** 8 bit output berurutan dikumpulkan menjadi 1 byte (bit pertama = MSB).
+- **Enkripsi/Dekripsi:** $C_i = P_i \oplus KS_i$ dan $P_i = C_i \oplus KS_i$.
 
-### 4.3 Formulasi Enkripsi dan Dekripsi
-- **Enkripsi:**
-  $$C = M^e \pmod n$$
-  Syarat batas matematis: Nilai integer pesan $M$ harus lebih kecil dari modulus $n$ ($M < n$).
-- **Dekripsi:**
-  $$M = C^d \pmod n$$
+Polinomial umpan balik yang dipakai (semuanya primitif sehingga periodenya maksimum $2^n - 1$):
 
-### 4.4 Contoh Perhitungan Manual
-- Pilih $p = 61$, $q = 53$.
-- Modulus $n = 61 \times 53 = 3233$.
-- Totient $\phi(n) = (61 - 1)(53 - 1) = 60 \times 52 = 3120$.
-- Pilih $e = 17$.
-  Verifikasi: $\gcd(17, 3120) = 1$ (karena $3120 = 17 \times 183 + 9$, $\gcd(17, 9) = 1$).
-- Hitung $d$:
-  Mencari $d$ sedemikian rupa sehingga $17 \cdot d \equiv 1 \pmod{3120}$.
-  Dengan Extended Euclidean Algorithm didapatkan $d = 2753$.
-  Pembuktian: $17 \times 2753 = 46801 = 15 \times 3120 + 1 \equiv 1 \pmod{3120}$.
+| Register | Polinomial | Tap | Periode |
+| :---: | :--- | :---: | :---: |
+| 4 bit | $x^4 + x^3 + 1$ | 4, 3 | 15 |
+| 8 bit | $x^8 + x^6 + x^5 + x^4 + 1$ | 8, 6, 5, 4 | 255 |
+| 16 bit | $x^{16} + x^{14} + x^{13} + x^{11} + 1$ | 16, 14, 13, 11 | 65.535 |
 
-Simulasi Enkripsi Karakter:
-- Karakter pesan: `'A'` $\rightarrow$ ASCII $M = 65$.
-- Enkripsi:
-  $$C = 65^{17} \pmod{3233}$$
-  Menggunakan metode *repeated squaring*:
-  $$65^2 = 4225 \equiv 992 \pmod{3233}$$
-  $$65^4 = 992^2 = 984064 \equiv 1374 \pmod{3233}$$
-  $$65^8 = 1374^2 = 1887876 \equiv 3053 \pmod{3233}$$
-  $$65^{16} = 3053^2 = 9320809 \equiv 992 \pmod{3233}$$
-  $$C = 65^{17} = 65^{16} \times 65 = 992 \times 65 = 64480 \equiv 3013 \pmod{3233}$$
-  Ciphertext numerik: `3013`.
+Seed tidak boleh semua nol karena register akan macet pada state `0000...` (feedback selalu 0).
 
-Simulasi Dekripsi:
-- $$M = 3013^{2753} \pmod{3233} = 65 \rightarrow \text{karakter } 'A' \text{ (pulih sempurna)}.$$
+### 4.3 Contoh Perhitungan Manual
+- **Register:** 4 bit, tap 4 dan 3 (bit indeks 0 dan 1 dari kanan), **seed** = `1001`.
+- Bit output = bit paling kanan; feedback = bit ke-4 dari kiri XOR bit ke-3 dari kiri.
+
+| Clock | State | Feedback | Output | State Berikutnya |
+| :---: | :---: | :---: | :---: | :---: |
+| 1 | 1001 | 1 $\oplus$ 0 = 1 | 1 | 1100 |
+| 2 | 1100 | 0 $\oplus$ 0 = 0 | 0 | 0110 |
+| 3 | 0110 | 0 $\oplus$ 1 = 1 | 0 | 1011 |
+| 4 | 1011 | 1 $\oplus$ 1 = 0 | 1 | 0101 |
+| 5 | 0101 | 1 $\oplus$ 0 = 1 | 1 | 1010 |
+| 6 | 1010 | 0 $\oplus$ 1 = 1 | 0 | 1101 |
+| 7 | 1101 | 1 $\oplus$ 0 = 1 | 1 | 1110 |
+| 8 | 1110 | 0 $\oplus$ 1 = 1 | 0 | 1111 |
+
+Keystream byte pertama = bit output clock 1-8 = `10011010` = `9A`.
+
+Enkripsi huruf `K` (ASCII 75 = `01001011`):
+$$01001011 \oplus 10011010 = 11010001 = \text{D1}$$
+
+Setelah 15 clock state kembali ke `1001` (periode = $2^4 - 1 = 15$), sehingga keystream byte kedua dilanjutkan dari clock 9 dst. Untuk `KR` dengan seed `1001` hasilnya `D1A3`. Dekripsi menghasilkan keystream yang identik dari seed yang sama.
+
+### 4.4 Catatan Keamanan
+LFSR bersifat **linear**: dengan $2n$ bit keystream yang diketahui, algoritma Berlekamp-Massey dapat merekonstruksi seluruh register. Karena itu LFSR murni tidak aman untuk penggunaan nyata; sistem praktis (mis. A5/1, E0) menggabungkan beberapa LFSR dengan fungsi non-linear. Aplikasi ini memakai LFSR tunggal untuk tujuan edukatif.
 
 ---
 
@@ -220,29 +210,33 @@ Prinsip *Defense in Depth* dalam kriptografi menyatakan bahwa sistem keamanan ya
 Super Enkripsi memadukan properti:
 1. **Difusi Awal (Playfair):** Menghancurkan pola bigram bahasa alami.
 2. **Konfusi Polialfabetik (Vigenère):** Menghilangkan keseragaman frekuensi karakter tunggal.
-3. **Difusi Tingkat Tinggi & Kompleksitas Non-Linear (AES-128):** Menerapkan standar enkripsi blok simetris terkuat terhadap kriptanalisis diferensial dan linier.
-4. **Asimetri Kunci Publik (RSA):** Memberikan proteksi enkripsi modular berbasis kesulitan faktorisasi prima.
+3. **Keystream Pseudo-Acak (LFSR Stream Cipher):** Mengubah teks huruf menjadi byte biner yang tampak acak dengan XOR terhadap keystream dari seed.
+4. **Kerahasiaan Sempurna Berbasis Kunci Acak (Vernam/OTP):** Lapisan terakhir dengan kunci acak sepanjang data.
 
 ### 5.2 Aliran Data dan Normalisasi Format Antar-Tahap
 Salah satu tantangan utama dalam *cipher chaining* adalah memastikan kompatibilitas format data saat berpindah antar algoritma tanpa mengalami kehilangan data (*data loss*):
 
-1. **Tahap 1 (Vigenère):**
-   - Masukan: Plaintext string UTF-8.
-   - Keluaran ($C_1$): String teks tergeser secara modular.
-2. **Tahap 2 (Playfair):**
-   - Masukan: String $C_1$.
+1. **Tahap 1 (Playfair):**
+   - Masukan: Plaintext string.
    - Normalisasi: Huruf non-alfabet disaring, huruf $J \rightarrow I$, huruf kembar disisipkan $X$.
-   - Keluaran ($C_2$): String alfabet berpasangan genap hasil transformasi matriks $5 \times 5$.
-3. **Tahap 3 (AES-128):**
-   - Masukan: String $C_2$ (dikonversi ke raw byte array UTF-8).
-   - Pemrosesan: Ditambahkan padding PKCS#7 agar kelipatan 16 byte, lalu dienkripsi menggunakan AES mode ECB.
-   - Keluaran ($C_3$): String **Base64**. Format Base64 dipilih karena menghasilkan string teks ASCII bersih dan aman ditransmisikan tanpa risiko byte biner tak tampak (*non-printable characters*).
-4. **Tahap 4 (RSA):**
-   - Masukan: String Base64 $C_3$.
-   - Pemrosesan: Setiap karakter ASCII dari string Base64 (yang memiliki nilai numerik $0 \le M \le 127 < n$) dienkripsi satu per satu menggunakan $C = M^e \pmod n$.
-   - Keluaran ($C_{\text{final}}$): Deretan integer yang dipisahkan oleh spasi.
+   - Keluaran ($C_1$): String alfabet berpasangan genap hasil transformasi matriks $5 \times 5$.
+2. **Tahap 2 (Vigenère):**
+   - Masukan: String $C_1$ (huruf kapital A-Z).
+   - Keluaran ($C_2$): String teks tergeser secara modular.
+3. **Tahap 3 (LFSR Stream Cipher):**
+   - Masukan: String $C_2$ dikonversi ke byte.
+   - Pemrosesan: Setiap byte di-XOR dengan keystream byte dari register LFSR.
+   - Keluaran ($C_3$): Deretan byte biner (ditampilkan sebagai heksadesimal, tetapi diteruskan sebagai byte mentah ke tahap berikutnya).
+4. **Tahap 4 (Vernam / OTP):**
+   - Masukan: Byte $C_3$.
+   - Pemrosesan: Setiap byte di-XOR dengan kunci OTP acak yang panjangnya sama dengan $C_3$ (dibangkitkan otomatis atau diisi manual).
+   - Keluaran ($C_{\text{final}}$): String **heksadesimal**. Format heksadesimal dipilih karena hasil XOR berupa byte yang tidak selalu dapat dicetak, sedangkan heksadesimal aman disalin dan ditransmisikan.
+
+**Mengapa Playfair di tahap pertama?** Playfair menggabungkan $J$ dan $I$. Jika Playfair dijalankan setelah Vigenère, huruf $J$ yang kebetulan muncul pada ciphertext Vigenère akan berubah menjadi $I$ dan tidak dapat dipulihkan saat dekripsi. Dengan menjalankan Playfair lebih dulu, penggabungan $J \rightarrow I$ dan penghapusan spasi hanya terjadi pada plaintext asli (sifat bawaan Playfair), sementara tahap-tahap sesudahnya (Vigenère, LFSR, Vernam) bersifat invertibel penuh.
 
 ### 5.3 Pembalikan Dekripsi yang Presisi
 Proses dekripsi menerapkan prinsip operasi invers secara simetris terbalik:
-$$C_{\text{final}} \xrightarrow{\text{RSA Decrypt}} C_3 \text{ (Base64)} \xrightarrow{\text{AES Decrypt}} C_2 \xrightarrow{\text{Playfair Decrypt}} C_1 \xrightarrow{\text{Vigenère Decrypt}} \text{Plaintext Asli}$$
-Setiap kunci yang digunakan harus identik dengan kunci saat enkripsi, dan urutan pembalikan tidak boleh tertukar.
+$$C_{\text{final}} \xrightarrow{\text{Vernam}^{-1}} C_3 \xrightarrow{\text{LFSR}^{-1}} C_2 \xrightarrow{\text{Vigenère}^{-1}} C_1 \xrightarrow{\text{Playfair}^{-1}} \text{Plaintext (tanpa spasi, dengan X padding)}$$
+Setiap kunci yang digunakan harus identik dengan kunci saat enkripsi (termasuk kunci Vernam yang dibangkitkan otomatis, yang wajib disimpan), dan urutan pembalikan tidak boleh tertukar.
+
+Karena sifat Playfair, plaintext hasil pemulihan tidak mengandung spasi, $J$ tergantikan $I$, dan dapat memiliki huruf $X$ tambahan sebagai padding (contoh: `KRIPTOGRAFI MODERN` menjadi `KRIPTOGRAFIMODERNX` atau sejenisnya).

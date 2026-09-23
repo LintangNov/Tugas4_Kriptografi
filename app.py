@@ -10,7 +10,7 @@ st.write(
     """
     Aplikasi web ini dibangun untuk tugas mata kuliah Kriptografi (Semester 5). 
     Platform ini menyediakan visualisasi proses enkripsi dan dekripsi langkah-demi-langkah 
-    secara transparan, baik untuk algoritma klasik (Vigenère dan Playfair), algoritma modern (AES dan RSA), 
+    secara transparan, baik untuk algoritma klasik (Vigenère dan Playfair), algoritma modern (Vernam Cipher dan LFSR Stream Cipher), 
     maupun kombinasi berurutan (Super Enkripsi).
     """
 )
@@ -29,10 +29,10 @@ with col1:
         "Menampilkan tabel pergeseran indeks, rumus modulo 26, dan karakter hasil."
     )
     
-    st.markdown("**3. Advanced Encryption Standard / AES (Modern - Blok Simetris)**")
+    st.markdown("**3. Vernam Cipher / One-Time Pad (Modern - Stream Simetris)**")
     st.write(
-        "Standar enkripsi blok simetris 128-bit (Rijndael). "
-        "Menampilkan proses PKCS#7 padding, key expansion, serta visualisasi state matrix 4x4 pada setiap tahapan round."
+        "Sandi aliran yang meng-XOR setiap byte plaintext dengan kunci acak sepanjang pesan. "
+        "Menampilkan representasi biner P, K, dan hasil XOR per karakter."
     )
 
 with col2:
@@ -42,15 +42,15 @@ with col2:
         "Menampilkan grid matriks, pemecahan huruf kembar dan ganjil, serta aturan pergeseran baris, kolom, dan persegi."
     )
 
-    st.markdown("**4. Rivest-Shamir-Adleman / RSA (Modern - Asimetris Kunci Publik)**")
+    st.markdown("**4. LFSR-based Stream Cipher (Modern - Stream Simetris)**")
     st.write(
-        "Kriptografi kunci publik manual menggunakan bilangan prima untuk demonstrasi edukatif. "
-        "Menampilkan pembentukan parameter n, totient Euler, pemilihan e, pencarian d (Extended Euclidean), dan eksponensial modular."
+        "Sandi aliran dengan keystream dari Linear Feedback Shift Register. "
+        "Menampilkan jejak clock register (state, feedback XOR tap, bit output) dan XOR keystream per byte."
     )
 
 st.markdown("**5. Super Enkripsi (Kombinasi 4 Layer)**")
 st.write(
-    "Penggabungan 4 algoritma secara berurutan: Vigenère -> Playfair -> AES-128 -> RSA saat enkripsi, "
+    "Penggabungan 4 algoritma secara berurutan: Playfair -> Vigenère -> LFSR -> Vernam saat enkripsi, "
     "dan urutan terbalik saat dekripsi, dilengkapi visualisasi tahapan dan diagram alur."
 )
 
